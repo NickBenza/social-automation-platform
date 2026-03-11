@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Activity, 
   MessageSquare, 
@@ -18,7 +18,8 @@ import {
   Bot,
   Power,
   PowerOff,
-  PauseCircle
+  PauseCircle,
+  Loader2
 } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -57,91 +58,17 @@ interface AgentStatus {
   tasksCompleted: number
 }
 
-// Mock Data
-const platforms: Platform[] = [
-  {
-    id: '1',
-    name: 'Threads',
-    icon: '🧵',
-    username: '@glade_runner85',
-    mode: 'draft',
-    followers: 390,
-    postsThisWeek: 12,
-    engagementRate: 4.2,
-    lastPost: '2 hours ago'
-  },
-  {
-    id: '2',
-    name: 'LinkedIn',
-    icon: '💼',
-    username: 'Nick Benza',
-    mode: 'automate',
-    followers: 14757,
-    postsThisWeek: 8,
-    engagementRate: 3.8,
-    lastPost: '1 hour ago'
-  },
-  {
-    id: '3',
-    name: 'X',
-    icon: '𝕏',
-    username: '@aiHiringRadar',
-    mode: 'off',
-    followers: 0,
-    postsThisWeek: 0,
-    engagementRate: 0,
+interface DashboardData {
+  stats: {
+    totalFollowers: number
+    postsThisWeek: number
+    engagementRate: number
+    pendingDrafts: number
+    tasksCompleted: number
   }
-]
-
-const drafts: DraftPost[] = [
-  {
-    id: '1',
-    platform: 'Threads',
-    content: 'sitting in the lodge at 4pm watching people ski past in jeans like that\'s normal behavior\n\nsir this is a double black diamond not a fashion show!!!\n\nanyway the beer is cold and my legs are dead!!!',
-    confidence: 0.92,
-    suggestedTime: '6:30 PM',
-    status: 'pending'
-  },
-  {
-    id: '2',
-    platform: 'LinkedIn',
-    content: 'The best candidates never apply through your ATS.\n\nAfter 14 years in recruiting, I\'ve noticed a pattern: the people companies actually want are rarely the ones flooding their job boards...',
-    confidence: 0.89,
-    suggestedTime: '8:00 AM',
-    status: 'approved'
-  }
-]
-
-const agents: AgentStatus[] = [
-  {
-    name: 'Content Generator',
-    status: 'active',
-    lastRun: '2 hours ago',
-    nextRun: 'in 4 hours',
-    tasksCompleted: 24
-  },
-  {
-    name: 'Engagement Manager',
-    status: 'active',
-    lastRun: '30 mins ago',
-    nextRun: 'in 30 mins',
-    tasksCompleted: 156
-  },
-  {
-    name: 'Trend Scanner',
-    status: 'active',
-    lastRun: '1 hour ago',
-    nextRun: 'in 3 hours',
-    tasksCompleted: 18
-  },
-  {
-    name: 'Analytics Reporter',
-    status: 'paused',
-    lastRun: '5 days ago',
-    nextRun: 'Monday 8:00 AM',
-    tasksCompleted: 4
-  }
-]
+  platforms: Platform[]
+  agents: AgentStatus[]
+}
 
 // Components
 function ModeBadge({ mode }: { mode: Platform['mode'] }) {
@@ -173,15 +100,21 @@ function ModeBadge({ mode }: { mode: Platform['mode'] }) {
   )
 }
 
-function StatCard({ label, value, change, icon: Icon }: { label: string; value: string; change?: string; icon: any }) {
+function StatCard({ label, value, change, icon: Icon, loading }: { label: string; value: string; change?: string; icon: any; loading?: boolean }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {change && (
-            <p className="text-sm text-emerald-600 mt-1">{change}</p>
+          {loading ? (
+            <Loader2 className="w-6 h-6 text-gray-400 animate-spin mt-2" />
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+              {change && (
+                <p className="text-sm text-emerald-600 mt-1">{change}</p>
+              )}
+            </>
           )}
         </div>
         <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -333,7 +266,57 @@ function AgentCard({ agent }: { agent: AgentStatus }) {
 // Main Dashboard
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
-  
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [drafts, setDrafts] = useState<DraftPost[]>([])
+  const [draftsLoading, setDraftsLoading] = useState(true)
+
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const response = await fetch('/api/dashboard')
+        if (response.ok) {
+          const dashboardData = await response.json()
+          setData(dashboardData)
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const fetchDrafts = async () => {
+      try {
+        const response = await fetch('/api/drafts')
+        if (response.ok) {
+          const draftsData = await response.json()
+          setDrafts(draftsData.drafts)
+        }
+      } catch (error) {
+        console.error('Failed to fetch drafts:', error)
+      } finally {
+        setDraftsLoading(false)
+      }
+    }
+
+    fetchDashboard()
+    fetchDrafts()
+  }, [])
+
+  // Default data for when API fails or during loading
+  const stats = data?.stats || {
+    totalFollowers: 0,
+    postsThisWeek: 0,
+    engagementRate: 0,
+    pendingDrafts: 0,
+    tasksCompleted: 0
+  }
+
+  const platforms = data?.platforms || []
+  const agents = data?.agents || []
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -402,27 +385,31 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard 
                 label="Total Followers" 
-                value="15,147" 
+                value={stats.totalFollowers.toLocaleString()} 
                 change="+12% this month"
                 icon={Users}
+                loading={loading}
               />
               <StatCard 
                 label="Posts This Week" 
-                value="20"
+                value={stats.postsThisWeek.toString()}
                 change="On track for goal"
                 icon={FileText}
+                loading={loading}
               />
               <StatCard 
                 label="Avg Engagement" 
-                value="4.1%"
+                value={`${stats.engagementRate}%`}
                 change="+0.8% vs last week"
                 icon={TrendingUp}
+                loading={loading}
               />
               <StatCard 
                 label="AI Tasks Completed" 
-                value="202"
+                value={stats.tasksCompleted.toString()}
                 change="24 in last 24h"
                 icon={Bot}
+                loading={loading}
               />
             </div>
             
@@ -437,20 +424,26 @@ export default function Dashboard() {
                   </button>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {platforms.map((platform) => (
-                    <PlatformCard key={platform.id} platform={platform} />
-                  ))}
-                  
-                  {/* Add Platform Card */}
-                  <button className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-colors min-h-[240px]">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                      <Plus className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <span className="font-medium text-gray-600">Connect New Platform</span>
-                    <span className="text-sm text-gray-400">X, Instagram, TikTok, and more</span>
-                  </button>
-                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center h-64">
+                    <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {platforms.map((platform) => (
+                      <PlatformCard key={platform.id} platform={platform} />
+                    ))}
+                    
+                    {/* Add Platform Card */}
+                    <button className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-colors min-h-[240px]">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                        <Plus className="w-6 h-6 text-gray-600" />
+                      </div>
+                      <span className="font-medium text-gray-600">Connect New Platform</span>
+                      <span className="text-sm text-gray-400">X, Instagram, TikTok, and more</span>
+                    </button>
+                  </div>
+                )}
               </div>
               
               {/* Sidebar */}
@@ -458,11 +451,17 @@ export default function Dashboard() {
                 {/* Agent Status */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                   <h3 className="font-semibold text-gray-900 mb-4">AI Agents Status</h3>
-                  <div className="space-y-3">
-                    {agents.map((agent) => (
-                      <AgentCard key={agent.name} agent={agent} />
-                    ))}
-                  </div>
+                  {loading ? (
+                    <div className="flex items-center justify-center h-32">
+                      <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {agents.map((agent) => (
+                        <AgentCard key={agent.name} agent={agent} />
+                      ))}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Voice Profile */}
@@ -472,7 +471,7 @@ export default function Dashboard() {
                     <h3 className="font-semibold">Voice Profile</h3>
                   </div>
                   <p className="text-sm text-white/80 mb-4">
-                    Your AI has analyzed 147 posts to learn your voice and tone.
+                    Your AI has analyzed your content to learn your voice and tone.
                   </p>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -503,11 +502,17 @@ export default function Dashboard() {
                   View All →
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {drafts.map((draft) => (
-                  <DraftCard key={draft.id} draft={draft} />
-                ))}
-              </div>
+              {draftsLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {drafts.slice(0, 4).map((draft) => (
+                    <DraftCard key={draft.id} draft={draft} />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -515,11 +520,17 @@ export default function Dashboard() {
         {activeTab === 'platforms' && (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">Platform Management</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {platforms.map((platform) => (
-                <PlatformCard key={platform.id} platform={platform} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {platforms.map((platform) => (
+                  <PlatformCard key={platform.id} platform={platform} />
+                ))}
+              </div>
+            )}
           </div>
         )}
         
@@ -539,62 +550,74 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
-            <div className="space-y-4">
-              {drafts.map((draft) => (
-                <DraftCard key={draft.id} draft={draft} />
-              ))}
-            </div>
+            {draftsLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {drafts.map((draft) => (
+                  <DraftCard key={draft.id} draft={draft} />
+                ))}
+              </div>
+            )}
           </div>
         )}
         
         {activeTab === 'agents' && (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">AI Agent Control Center</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {agents.map((agent) => (
-                <div key={agent.name} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <Bot className="w-6 h-6 text-blue-600" />
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {agents.map((agent) => (
+                  <div key={agent.name} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                          <Bot className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{agent.name}</h3>
+                          <span className={cn(
+                            'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium mt-1',
+                            agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          )}>
+                            {agent.status === 'active' ? '● Active' : '⏸ Paused'}
+                          </span>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={agent.status === 'active'} />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4 py-4 border-t border-b border-gray-100">
+                      <div>
+                        <p className="text-2xl font-bold text-gray-900">{agent.tasksCompleted}</p>
+                        <p className="text-xs text-gray-500">Tasks Done</p>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{agent.name}</h3>
-                        <span className={cn(
-                          'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium mt-1',
-                          agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        )}>
-                          {agent.status === 'active' ? '● Active' : '⏸ Paused'}
-                        </span>
+                        <p className="text-sm font-medium text-gray-900">{agent.lastRun}</p>
+                        <p className="text-xs text-gray-500">Last Run</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{agent.nextRun}</p>
+                        <p className="text-xs text-gray-500">Next Run</p>
                       </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={agent.status === 'active'} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
+                    
+                    <button className="w-full mt-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50">
+                      Configure Agent
+                    </button>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4 py-4 border-t border-b border-gray-100">
-                    <div>
-                      <p className="text-2xl font-bold text-gray-900">{agent.tasksCompleted}</p>
-                      <p className="text-xs text-gray-500">Tasks Done</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{agent.lastRun}</p>
-                      <p className="text-xs text-gray-500">Last Run</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{agent.nextRun}</p>
-                      <p className="text-xs text-gray-500">Next Run</p>
-                    </div>
-                  </div>
-                  
-                  <button className="w-full mt-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50">
-                    Configure Agent
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         
