@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -13,7 +13,7 @@ model User {
   name          String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  settings      Json?    @default("{}")
+  settings      String?  @default("{}") // JSON as string for SQLite
   
   // Relations
   platforms     ConnectedPlatform[]
@@ -30,10 +30,10 @@ model User {
 }
 
 model ConnectedPlatform {
-  id                String           @id @default(cuid())
+  id                String   @id @default(cuid())
   userId            String
   platformName      String           // threads, x, linkedin, instagram, etc.
-  mode              PlatformMode     @default(OFF)
+  mode              String           @default("OFF") // OFF, DRAFT_CRON, AUTOMATE
   
   // OAuth tokens (encrypted)
   oauthToken        String?          // AES-256-GCM encrypted
@@ -46,8 +46,8 @@ model ConnectedPlatform {
   followerCount     Int?             @default(0)
   
   // Configuration
-  config            Json?            @default("{}")
-  guardrails        Json?            @default("{}")
+  config            String?          @default("{}") // JSON as string
+  guardrails        String?          @default("{}") // JSON as string
   
   // Timestamps
   connectedAt       DateTime         @default(now())
@@ -64,19 +64,13 @@ model ConnectedPlatform {
   @@map("connected_platforms")
 }
 
-enum PlatformMode {
-  OFF
-  DRAFT_CRON
-  AUTOMATE
-}
-
 model VoiceProfile {
   id              String   @id @default(cuid())
   userId          String   @unique
-  profileJson     Json     // Full voice profile structure
+  profileJson     String   // Full voice profile as JSON string
   version         Int      @default(1)
   lastScannedAt   DateTime @default(now())
-  samplePosts     Json?    // Array of sample posts used
+  samplePosts     String?  // Array of sample posts as JSON string
   
   // Relations
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -85,24 +79,24 @@ model VoiceProfile {
 }
 
 model DraftQueue {
-  id                String           @id @default(cuid())
+  id                String   @id @default(cuid())
   userId            String
   platformId        String
   
   // Content
-  contentText       String           @db.Text
-  mediaSuggestions  Json?            // {type: "image", prompt: "..."} etc
+  contentText       String
+  mediaSuggestions  String?  // JSON as string
   suggestedPostTime DateTime?
-  hashtags          String[]         @default([])
-  category          ContentCategory  @default(ENGAGEMENT)
-  confidenceScore   Float            @default(0.0) // 0-1
+  hashtags          String   // Comma-separated or JSON array
+  category          String   @default("ENGAGEMENT") // EDUCATIONAL, PROMOTIONAL, etc.
+  confidenceScore   Float    @default(0.0) // 0-1
   
   // Status
-  status            DraftStatus      @default(PENDING)
-  createdByAgent    String           @default("content-generator")
+  status            String   @default("PENDING") // PENDING, APPROVED, POSTED, DISMISSED
+  createdByAgent    String   @default("content-generator")
   
   // Timestamps
-  createdAt         DateTime         @default(now())
+  createdAt         DateTime @default(now())
   postedAt          DateTime?
   
   // Relations
@@ -112,40 +106,25 @@ model DraftQueue {
   @@map("draft_queue")
 }
 
-enum DraftStatus {
-  PENDING
-  APPROVED
-  POSTED
-  DISMISSED
-}
-
-enum ContentCategory {
-  EDUCATIONAL
-  PROMOTIONAL
-  ENGAGEMENT
-  STORYTELLING
-  CURATED
-}
-
 model ScheduledPost {
-  id                String           @id @default(cuid())
+  id                String   @id @default(cuid())
   userId            String
   platformId        String
   
   // Content
-  contentText       String           @db.Text
+  contentText       String
   mediaUrl          String?
   
   // Scheduling
   scheduledTime     DateTime
-  status            ScheduledStatus  @default(QUEUED)
+  status            String   @default("QUEUED") // QUEUED, POSTED, FAILED, CANCELLED
   
   // Result
-  postPlatformId    String?          // ID from the platform API after posting
+  postPlatformId    String?  // ID from the platform API after posting
   errorLog          String?
   
   // Timestamps
-  createdAt         DateTime         @default(now())
+  createdAt         DateTime @default(now())
   postedAt          DateTime?
   
   // Relations
@@ -153,13 +132,6 @@ model ScheduledPost {
   platform          ConnectedPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
   
   @@map("scheduled_posts")
-}
-
-enum ScheduledStatus {
-  QUEUED
-  POSTED
-  FAILED
-  CANCELLED
 }
 
 model CommentTracked {
@@ -173,16 +145,16 @@ model CommentTracked {
   
   // Content
   authorName          String
-  commentText         String   @db.Text
+  commentText         String
   
   // Analysis
   sentimentScore      Float?   // -1 to 1
-  sentimentLabel      SentimentLabel @default(NEUTRAL)
-  intentClassification IntentType @default(OTHER)
-  priority            PriorityLevel @default(LOW)
+  sentimentLabel      String   @default("NEUTRAL") // POSITIVE, NEUTRAL, NEGATIVE, HOSTILE
+  intentClassification String  @default("OTHER") // QUESTION, COMPLIMENT, etc.
+  priority            String   @default("LOW") // LOW, MEDIUM, HIGH, ESCALATE
   
   // Status
-  status              CommentStatus @default(NEW)
+  status              String   @default("NEW") // NEW, REPLIED, FLAGGED, IGNORED
   
   // Timestamps
   createdAt           DateTime @default(now())
@@ -197,52 +169,20 @@ model CommentTracked {
   @@map("comments_tracked")
 }
 
-enum SentimentLabel {
-  POSITIVE
-  NEUTRAL
-  NEGATIVE
-  HOSTILE
-}
-
-enum IntentType {
-  QUESTION
-  COMPLIMENT
-  COMPLAINT
-  SPAM
-  TROLL
-  COLLABORATION
-  CUSTOMER_INQUIRY
-  OTHER
-}
-
-enum PriorityLevel {
-  LOW
-  MEDIUM
-  HIGH
-  ESCALATE
-}
-
-enum CommentStatus {
-  NEW
-  REPLIED
-  FLAGGED
-  IGNORED
-}
-
 model ReplyQueue {
-  id                String       @id @default(cuid())
+  id                String   @id @default(cuid())
   commentId         String
   
   // Suggested content
-  suggestedReplyText String      @db.Text
+  suggestedReplyText String
   
   // Mode
-  mode              ReplyMode    @default(SUGGESTION)
-  status            ReplyStatus  @default(PENDING)
+  mode              String   @default("SUGGESTION") // SUGGESTION, AUTO_POSTED
+  status            String   @default("PENDING") // PENDING, APPROVED, POSTED, DISMISSED
   
   // Timestamps
   postedAt          DateTime?
-  createdAt         DateTime     @default(now())
+  createdAt         DateTime @default(now())
   
   // Relations
   comment           CommentTracked @relation(fields: [commentId], references: [id], onDelete: Cascade)
@@ -250,22 +190,10 @@ model ReplyQueue {
   @@map("reply_queue")
 }
 
-enum ReplyMode {
-  SUGGESTION
-  AUTO_POSTED
-}
-
-enum ReplyStatus {
-  PENDING
-  APPROVED
-  POSTED
-  DISMISSED
-}
-
 model TrendReport {
   id          String   @id @default(cuid())
   userId      String
-  reportJson  Json     // Full trend report structure
+  reportJson  String   // Full trend report as JSON string
   createdAt   DateTime @default(now())
   
   // Relations
@@ -277,7 +205,7 @@ model TrendReport {
 model AnalyticsReport {
   id              String   @id @default(cuid())
   userId          String
-  reportJson      Json     // Full analytics report
+  reportJson      String   // Full analytics report as JSON string
   dateRangeStart  DateTime
   dateRangeEnd    DateTime
   createdAt       DateTime @default(now())
@@ -289,28 +217,21 @@ model AnalyticsReport {
 }
 
 model AgentAuditLog {
-  id              String      @id @default(cuid())
+  id              String   @id @default(cuid())
   userId          String
-  agentName       String      // content-generator, engagement-manager, etc
-  actionType      String      // generate_post, reply_comment, etc
+  agentName       String   // content-generator, engagement-manager, etc
+  actionType      String   // generate_post, reply_comment, etc
   platformName    String?
-  contentSummary  String?     @db.Text
-  status          AuditStatus @default(SUCCESS)
-  errorMessage    String?     @db.Text
-  metadataJson    Json?       // Additional context
-  createdAt       DateTime    @default(now())
+  contentSummary  String?
+  status          String   @default("SUCCESS") // SUCCESS, FAILURE, SKIPPED, ESCALATED
+  errorMessage    String?
+  metadataJson    String?  // Additional context as JSON string
+  createdAt       DateTime @default(now())
   
   // Relations
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("agent_audit_log")
-}
-
-enum AuditStatus {
-  SUCCESS
-  FAILURE
-  SKIPPED
-  ESCALATED
 }
 
 model AgentSchedule {
@@ -321,7 +242,7 @@ model AgentSchedule {
   enabled             Boolean  @default(true)
   lastRunAt           DateTime?
   nextRunAt           DateTime?
-  configOverridesJson Json?    // Per-user agent config
+  configOverridesJson String?  // Per-user agent config as JSON string
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   
