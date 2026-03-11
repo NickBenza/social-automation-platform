@@ -43,16 +43,32 @@ export default function ThreadsCallback() {
         if (data.success) {
           setStatus("success");
           setMessage(`Connected as @${data.username}`);
-          // Redirect back to platforms page after 2 seconds
-          setTimeout(() => router.push("/?tab=platforms"), 2000);
+          // Send message to parent window if opened as popup
+          if (window.opener) {
+            window.opener.postMessage({ type: "OAUTH_SUCCESS", platform: "threads" }, "*");
+          }
+          // Close popup after 1 second, or redirect if not popup
+          setTimeout(() => {
+            if (window.opener) {
+              window.close();
+            } else {
+              router.push("/?tab=platforms");
+            }
+          }, 1000);
         } else {
           setStatus("error");
           setMessage(data.error || "Failed to connect");
+          if (window.opener) {
+            window.opener.postMessage({ type: "OAUTH_ERROR", error: data.error }, "*");
+          }
         }
       })
       .catch((err) => {
         setStatus("error");
         setMessage("Network error. Please try again.");
+        if (window.opener) {
+          window.opener.postMessage({ type: "OAUTH_ERROR", error: "Network error" }, "*");
+        }
       });
   }, [searchParams, router]);
 

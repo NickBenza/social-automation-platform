@@ -19,10 +19,12 @@ import {
   Power,
   PowerOff,
   PauseCircle,
-  Loader2
+  Loader2,
+  Plug
 } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { ConnectModal } from './components/ConnectModal'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -125,7 +127,9 @@ function StatCard({ label, value, change, icon: Icon, loading }: { label: string
   )
 }
 
-function PlatformCard({ platform }: { platform: Platform }) {
+function PlatformCard({ platform, onConnect }: { platform: Platform; onConnect?: () => void }) {
+  const isConnected = platform.mode !== 'off' && platform.username !== ''
+  
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
@@ -135,7 +139,9 @@ function PlatformCard({ platform }: { platform: Platform }) {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">{platform.name}</h3>
-            <p className="text-sm text-gray-500">{platform.username}</p>
+            <p className="text-sm text-gray-500">
+              {isConnected ? platform.username : 'Not connected'}
+            </p>
           </div>
         </div>
         <ModeBadge mode={platform.mode} />
@@ -143,30 +149,48 @@ function PlatformCard({ platform }: { platform: Platform }) {
       
       <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100">
         <div>
-          <p className="text-2xl font-bold text-gray-900">{platform.followers.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {isConnected ? platform.followers.toLocaleString() : '-'}
+          </p>
           <p className="text-xs text-gray-500 mt-0.5">Followers</p>
         </div>
         <div>
-          <p className="text-2xl font-bold text-gray-900">{platform.postsThisWeek}</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {isConnected ? platform.postsThisWeek : '-'}
+          </p>
           <p className="text-xs text-gray-500 mt-0.5">Posts This Week</p>
         </div>
         <div>
-          <p className="text-2xl font-bold text-gray-900">{platform.engagementRate}%</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {isConnected ? `${platform.engagementRate}%` : '-'}
+          </p>
           <p className="text-xs text-gray-500 mt-0.5">Engagement</p>
         </div>
       </div>
       
-      {platform.lastPost && (
+      {platform.lastPost && isConnected && (
         <p className="text-xs text-gray-400 mt-4">Last post: {platform.lastPost}</p>
       )}
       
       <div className="flex gap-2 mt-4">
-        <button className="flex-1 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-          Configure
-        </button>
-        <button className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
-          View Analytics
-        </button>
+        {isConnected ? (
+          <>
+            <button className="flex-1 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+              Configure
+            </button>
+            <button className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+              View Analytics
+            </button>
+          </>
+        ) : (
+          <button 
+            onClick={onConnect}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plug className="w-4 h-4" />
+            Connect {platform.name}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -270,6 +294,16 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [drafts, setDrafts] = useState<DraftPost[]>([])
   const [draftsLoading, setDraftsLoading] = useState(true)
+  const [connectModalOpen, setConnectModalOpen] = useState(false)
+  const [connectingPlatform, setConnectingPlatform] = useState<"threads" | "linkedin" | "x" | null>(null)
+  
+  // Hardcoded user ID for demo (in production, get from auth context)
+  const userId = "cmmmm5nr80000bmzd5l7n3xtu"
+  
+  const openConnectModal = (platform: "threads" | "linkedin" | "x") => {
+    setConnectingPlatform(platform)
+    setConnectModalOpen(true)
+  }
 
   // Fetch dashboard data
   useEffect(() => {
@@ -418,10 +452,22 @@ export default function Dashboard() {
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-gray-900">Connected Platforms</h2>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                    <Plus className="w-4 h-4" />
-                    Connect Platform
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => openConnectModal("threads")}
+                      className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      <span>🧵</span>
+                      Connect Threads
+                    </button>
+                    <button 
+                      onClick={() => openConnectModal("linkedin")}
+                      className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-800 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      <span>💼</span>
+                      Connect LinkedIn
+                    </button>
+                  </div>
                 </div>
                 
                 {loading ? (
@@ -431,17 +477,39 @@ export default function Dashboard() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {platforms.map((platform) => (
-                      <PlatformCard key={platform.id} platform={platform} />
+                      <PlatformCard 
+                        key={platform.id} 
+                        platform={platform} 
+                        onConnect={() => {
+                          const platformKey = platform.name.toLowerCase() as "threads" | "linkedin" | "x"
+                          if (platformKey === "threads" || platformKey === "linkedin") {
+                            openConnectModal(platformKey)
+                          }
+                        }}
+                      />
                     ))}
                     
                     {/* Add Platform Card */}
-                    <button className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-colors min-h-[240px]">
+                    <div className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-gray-300 rounded-xl min-h-[240px]">
                       <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                        <Plus className="w-6 h-6 text-gray-600" />
+                        <Plug className="w-6 h-6 text-gray-600" />
                       </div>
-                      <span className="font-medium text-gray-600">Connect New Platform</span>
-                      <span className="text-sm text-gray-400">X, Instagram, TikTok, and more</span>
-                    </button>
+                      <span className="font-medium text-gray-600">Connect a Platform</span>
+                      <div className="flex gap-2 mt-2">
+                        <button 
+                          onClick={() => openConnectModal("threads")}
+                          className="px-3 py-1.5 bg-purple-100 text-purple-700 text-sm rounded-lg hover:bg-purple-200 transition-colors"
+                        >
+                          🧵 Threads
+                        </button>
+                        <button 
+                          onClick={() => openConnectModal("linkedin")}
+                          className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm rounded-lg hover:bg-blue-200 transition-colors"
+                        >
+                          💼 LinkedIn
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -519,7 +587,25 @@ export default function Dashboard() {
         
         {activeTab === 'platforms' && (
           <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">Platform Management</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Platform Management</h2>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => openConnectModal("threads")}
+                  className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  <span>🧵</span>
+                  Connect Threads
+                </button>
+                <button 
+                  onClick={() => openConnectModal("linkedin")}
+                  className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-800 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  <span>💼</span>
+                  Connect LinkedIn
+                </button>
+              </div>
+            </div>
             {loading ? (
               <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
@@ -527,7 +613,16 @@ export default function Dashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {platforms.map((platform) => (
-                  <PlatformCard key={platform.id} platform={platform} />
+                  <PlatformCard 
+                    key={platform.id} 
+                    platform={platform}
+                    onConnect={() => {
+                      const platformKey = platform.name.toLowerCase() as "threads" | "linkedin" | "x"
+                      if (platformKey === "threads" || platformKey === "linkedin") {
+                        openConnectModal(platformKey)
+                      }
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -634,6 +729,14 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      
+      {/* Connect Platform Modal */}
+      <ConnectModal
+        platform={connectingPlatform}
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        userId={userId}
+      />
     </div>
   )
 }

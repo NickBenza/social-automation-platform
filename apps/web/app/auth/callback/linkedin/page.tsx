@@ -44,15 +44,32 @@ export default function LinkedInCallback() {
         if (data.success) {
           setStatus("success");
           setMessage(`Connected as ${data.username}`);
-          setTimeout(() => router.push("/?tab=platforms"), 2000);
+          // Send message to parent window if opened as popup
+          if (window.opener) {
+            window.opener.postMessage({ type: "OAUTH_SUCCESS", platform: "linkedin" }, "*");
+          }
+          // Close popup after 1 second, or redirect if not popup
+          setTimeout(() => {
+            if (window.opener) {
+              window.close();
+            } else {
+              router.push("/?tab=platforms");
+            }
+          }, 1000);
         } else {
           setStatus("error");
           setMessage(data.error || "Failed to connect");
+          if (window.opener) {
+            window.opener.postMessage({ type: "OAUTH_ERROR", error: data.error }, "*");
+          }
         }
       })
       .catch((err) => {
         setStatus("error");
         setMessage("Network error. Please try again.");
+        if (window.opener) {
+          window.opener.postMessage({ type: "OAUTH_ERROR", error: "Network error" }, "*");
+        }
       });
   }, [searchParams, router]);
 
