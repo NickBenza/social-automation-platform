@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@social-platform/database";
 
 // Force dynamic rendering for API routes
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
 
 // Threads OAuth configuration
 const THREADS_AUTH_URL = "https://threads.net/oauth/authorize";

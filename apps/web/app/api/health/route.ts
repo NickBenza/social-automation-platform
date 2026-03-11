@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@social-platform/database";
 
 export const dynamic = 'force-dynamic';
 
