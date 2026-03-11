@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
+// Force dynamic rendering for API routes
+export const dynamic = 'force-dynamic';
+
 const prisma = new PrismaClient();
 
 // LinkedIn OAuth configuration
@@ -24,8 +27,13 @@ export async function GET(request: NextRequest) {
     const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
     
     if (!clientId || !redirectUri) {
+      console.error("LinkedIn not configured - missing LINKEDIN_CLIENT_ID or LINKEDIN_REDIRECT_URI");
       return NextResponse.json(
-        { error: "LinkedIn app not configured. Set LINKEDIN_CLIENT_ID and LINKEDIN_REDIRECT_URI" },
+        { 
+          error: "LinkedIn app not configured", 
+          details: "The platform owner needs to set LINKEDIN_CLIENT_ID and LINKEDIN_REDIRECT_URI environment variables",
+          setupGuide: "https://github.com/NickBenza/social-automation-platform/blob/main/docs/API_SETUP.md"
+        },
         { status: 500 }
       );
     }

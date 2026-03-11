@@ -66,6 +66,15 @@ export function ConnectModal({ platform, isOpen, onClose, userId }: ConnectModal
     try {
       // Call the API to get the OAuth URL
       const response = await fetch(`/api/auth/${platform}?userId=${userId}`);
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response:", text.substring(0, 200));
+        throw new Error("Server returned an error page. Check console for details.");
+      }
+      
       const data = await response.json();
 
       if (!response.ok) {

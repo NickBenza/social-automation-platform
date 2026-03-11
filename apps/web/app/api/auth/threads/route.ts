@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
+// Force dynamic rendering for API routes
+export const dynamic = 'force-dynamic';
+
 const prisma = new PrismaClient();
 
 // Threads OAuth configuration
@@ -24,8 +27,13 @@ export async function GET(request: NextRequest) {
     const redirectUri = process.env.THREADS_REDIRECT_URI;
     
     if (!appId || !redirectUri) {
+      console.error("Threads not configured - missing THREADS_APP_ID or THREADS_REDIRECT_URI");
       return NextResponse.json(
-        { error: "Threads app not configured. Set THREADS_APP_ID and THREADS_REDIRECT_URI" },
+        { 
+          error: "Threads app not configured",
+          details: "The platform owner needs to set THREADS_APP_ID and THREADS_REDIRECT_URI environment variables",
+          setupGuide: "https://github.com/NickBenza/social-automation-platform/blob/main/docs/API_SETUP.md"
+        },
         { status: 500 }
       );
     }
