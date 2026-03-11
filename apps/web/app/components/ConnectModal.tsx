@@ -65,20 +65,26 @@ export function ConnectModal({ platform, isOpen, onClose, userId }: ConnectModal
 
     try {
       // Call the API to get the OAuth URL
-      const response = await fetch(`/api/auth/${platform}?userId=${userId}`);
+      const url = `/api/auth/${platform}?userId=${userId}`;
+      console.log("[ConnectModal] Fetching:", url);
+      
+      const response = await fetch(url);
+      console.log("[ConnectModal] Response status:", response.status);
+      console.log("[ConnectModal] Content-Type:", response.headers.get("content-type"));
       
       // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error("Non-JSON response:", text.substring(0, 200));
-        throw new Error("Server returned an error page. Check console for details.");
+        console.error("[ConnectModal] Non-JSON response:", text.substring(0, 500));
+        throw new Error(`Server returned ${response.status}. Check terminal console for details.`);
       }
       
       const data = await response.json();
+      console.log("[ConnectModal] Response data:", data);
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to start connection");
+        throw new Error(data.error || data.details || "Failed to start connection");
       }
 
       if (data.authUrl) {

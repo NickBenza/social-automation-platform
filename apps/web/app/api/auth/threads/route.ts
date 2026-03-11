@@ -15,9 +15,13 @@ const THREADS_TOKEN_URL = "https://graph.threads.net/oauth/access_token";
  * Initiates OAuth flow for Threads
  */
 export async function GET(request: NextRequest) {
+  console.log("[API] Threads GET called with URL:", request.url);
+  
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    
+    console.log("[API] userId:", userId);
     
     if (!userId) {
       return NextResponse.json({ error: "userId required" }, { status: 400 });
