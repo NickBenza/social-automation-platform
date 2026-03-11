@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  settings      Json?    @default("{}")
+  
+  // Relations
+  platforms     ConnectedPlatform[]
+  voiceProfile  VoiceProfile?
+  draftQueue    DraftQueue[]
+  scheduledPosts ScheduledPost[]
+  comments      CommentTracked[]
+  trendReports  TrendReport[]
+  analyticsReports AnalyticsReport[]
+  agentAuditLogs AgentAuditLog[]
+  agentSchedules AgentSchedule[]
+
+  @@map("users")
+}
+
+model ConnectedPlatform {
+  id                String           @id @default(cuid())
+  userId            String
+  platformName      String           // threads, x, linkedin, instagram, etc.
+  mode              PlatformMode     @default(OFF)
+  
+  // OAuth tokens (encrypted)
+  oauthToken        String?          // AES-256-GCM encrypted
+  refreshToken      String?          // AES-256-GCM encrypted
+  tokenExpiresAt    DateTime?
+  
+  // Platform user info
+  platformUserId    String?
+  platformUsername  String?
+  followerCount     Int?             @default(0)
+  
+  // Configuration
+  config            Json?            @default("{}")
+  guardrails        Json?            @default("{}")
+  
+  // Timestamps
+  connectedAt       DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  lastSyncAt        DateTime?
+  
+  // Relations
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drafts            DraftQueue[]
+  scheduledPosts    ScheduledPost[]
+  comments          CommentTracked[]
+  
+  @@unique([userId, platformName])
+  @@map("connected_platforms")
+}
+
+enum PlatformMode {
+  OFF
+  DRAFT_CRON
+  AUTOMATE
+}
+
+model VoiceProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  profileJson     Json     // Full voice profile structure
+  version         Int      @default(1)
+  lastScannedAt   DateTime @default(now())
+  samplePosts     Json?    // Array of sample posts used
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("voice_profiles")
+}
+
+model DraftQueue {
+  id                String           @id @default(cuid())
+  userId            String
+  platformId        String
+  
+  // Content
+  contentText       String           @db.Text
+  mediaSuggestions  Json?            // {type: "image", prompt: "..."} etc
+  suggestedPostTime DateTime?
+  hashtags          String[]         @default([])
+  category          ContentCategory  @default(ENGAGEMENT)
+  confidenceScore   Float            @default(0.0) // 0-1
+  
+  // Status
+  status            DraftStatus      @default(PENDING)
+  createdByAgent    String           @default("content-generator")
+  
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  postedAt          DateTime?
+  
+  // Relations
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform          ConnectedPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  
+  @@map("draft_queue")
+}
+
+enum DraftStatus {
+  PENDING
+  APPROVED
+  POSTED
+  DISMISSED
+}
+
+enum ContentCategory {
+  EDUCATIONAL
+  PROMOTIONAL
+  ENGAGEMENT
+  STORYTELLING
+  CURATED
+}
+
+model ScheduledPost {
+  id                String           @id @default(cuid())
+  userId            String
+  platformId        String
+  
+  // Content
+  contentText       String           @db.Text
+  mediaUrl          String?
+  
+  // Scheduling
+  scheduledTime     DateTime
+  status            ScheduledStatus  @default(QUEUED)
+  
+  // Result
+  postPlatformId    String?          // ID from the platform API after posting
+  errorLog          String?
+  
+  // Timestamps
+  createdAt         DateTime         @default(now())
+  postedAt          DateTime?
+  
+  // Relations
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform          ConnectedPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  
+  @@map("scheduled_posts")
+}
+
+enum ScheduledStatus {
+  QUEUED
+  POSTED
+  FAILED
+  CANCELLED
+}
+
+model CommentTracked {
+  id                  String   @id @default(cuid())
+  userId              String
+  platformId          String
+  
+  // Platform IDs
+  postPlatformId      String   // ID of the post on the platform
+  commentPlatformId   String   // ID of the comment on the platform
+  
+  // Content
+  authorName          String
+  commentText         String   @db.Text
+  
+  // Analysis
+  sentimentScore      Float?   // -1 to 1
+  sentimentLabel      SentimentLabel @default(NEUTRAL)
+  intentClassification IntentType @default(OTHER)
+  priority            PriorityLevel @default(LOW)
+  
+  // Status
+  status              CommentStatus @default(NEW)
+  
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relations
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform            ConnectedPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  replyQueue          ReplyQueue[]
+  
+  @@unique([platformId, commentPlatformId])
+  @@map("comments_tracked")
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  HOSTILE
+}
+
+enum IntentType {
+  QUESTION
+  COMPLIMENT
+  COMPLAINT
+  SPAM
+  TROLL
+  COLLABORATION
+  CUSTOMER_INQUIRY
+  OTHER
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  ESCALATE
+}
+
+enum CommentStatus {
+  NEW
+  REPLIED
+  FLAGGED
+  IGNORED
+}
+
+model ReplyQueue {
+  id                String       @id @default(cuid())
+  commentId         String
+  
+  // Suggested content
+  suggestedReplyText String      @db.Text
+  
+  // Mode
+  mode              ReplyMode    @default(SUGGESTION)
+  status            ReplyStatus  @default(PENDING)
+  
+  // Timestamps
+  postedAt          DateTime?
+  createdAt         DateTime     @default(now())
+  
+  // Relations
+  comment           CommentTracked @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@map("reply_queue")
+}
+
+enum ReplyMode {
+  SUGGESTION
+  AUTO_POSTED
+}
+
+enum ReplyStatus {
+  PENDING
+  APPROVED
+  POSTED
+  DISMISSED
+}
+
+model TrendReport {
+  id          String   @id @default(cuid())
+  userId      String
+  reportJson  Json     // Full trend report structure
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("trend_reports")
+}
+
+model AnalyticsReport {
+  id              String   @id @default(cuid())
+  userId          String
+  reportJson      Json     // Full analytics report
+  dateRangeStart  DateTime
+  dateRangeEnd    DateTime
+  createdAt       DateTime @default(now())
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("analytics_reports")
+}
+
+model AgentAuditLog {
+  id              String      @id @default(cuid())
+  userId          String
+  agentName       String      // content-generator, engagement-manager, etc
+  actionType      String      // generate_post, reply_comment, etc
+  platformName    String?
+  contentSummary  String?     @db.Text
+  status          AuditStatus @default(SUCCESS)
+  errorMessage    String?     @db.Text
+  metadataJson    Json?       // Additional context
+  createdAt       DateTime    @default(now())
+  
+  // Relations
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("agent_audit_log")
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILURE
+  SKIPPED
+  ESCALATED
+}
+
+model AgentSchedule {
+  id                  String   @id @default(cuid())
+  userId              String
+  agentName           String
+  cronExpression      String
+  enabled             Boolean  @default(true)
+  lastRunAt           DateTime?
+  nextRunAt           DateTime?
+  configOverridesJson Json?    // Per-user agent config
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relations
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, agentName])
+  @@map("agent_schedules")
+}

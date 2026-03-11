@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: social-platform-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: social_automation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    container_name: social-platform-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # Ollama for local LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: social-platform-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Pull Kimi K2.5 on startup (or use lighter model for dev)
+    entrypoint: >
+      sh -c "
+        ollama serve &
+        sleep 5
+        ollama pull qwen2.5:14b || true
+        wait
+      "
+
+  # Next.js Web App
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: social-platform-web
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/social_automation
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_URL=http://ollama:11434
+      - NEXTAUTH_SECRET=your-secret-here
+      - NEXTAUTH_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+
+  # Agent Worker (Python)
+  agents:
+    build:
+      context: .
+      dockerfile: packages/agents/Dockerfile
+    container_name: social-platform-agents
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/social_automation
+      - REDIS_URL=redis://redis:6379
+      - OLLAMA_URL=http://ollama:11434
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+    volumes:
+      - ./packages/agents:/app
+      - ./packages/connectors:/app/connectors
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
