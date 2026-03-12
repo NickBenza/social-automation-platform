@@ -1,0 +1,1 @@
+https://threads.net/oauth/authorize?client_id=821897920939467&redirect_uri=https%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback%2Fthreads&scope=threads_basic,threads_content_publish&response_type=code&state=test_user_123
