@@ -52,7 +52,7 @@ const PLATFORM_CONFIG = {
 };
 
 export function ConnectModal({ platform, isOpen, onClose, userId }: ConnectModalProps) {
-  const [step, setStep] = useState<"intro" | "connecting" | "waiting" | "success" | "error">("intro");
+  const [step, setStep] = useState<"intro" | "connecting" | "waiting" | "success" | "error" | "not-configured">("intro");
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !platform) return null;
@@ -84,6 +84,12 @@ export function ConnectModal({ platform, isOpen, onClose, userId }: ConnectModal
       console.log("[ConnectModal] Response data:", data);
 
       if (!response.ok) {
+        // Handle "not configured" error specially
+        if (data.error?.includes("not configured")) {
+          setStep("not-configured");
+          setError(data.details || "Platform not configured");
+          return;
+        }
         throw new Error(data.error || data.details || "Failed to start connection");
       }
 
@@ -250,6 +256,42 @@ export function ConnectModal({ platform, isOpen, onClose, userId }: ConnectModal
               >
                 Try Again
               </button>
+            </div>
+          )}
+
+          {step === "not-configured" && (
+            <div className="text-center py-6">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">⚙️</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {config.name} Not Configured
+              </h3>
+              <p className="text-gray-600 mb-4">
+                This platform needs to be set up by the platform owner before customers can connect their accounts.
+              </p>
+              
+              <div className="bg-gray-50 rounded-lg p-4 text-left mb-4">
+                <h4 className="font-medium text-gray-900 mb-2">Platform Owner Setup Required:</h4>
+                <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                  <li>Create a {config.name} Developer App</li>
+                  <li>Get OAuth credentials (Client ID & Secret)</li>
+                  <li>Add credentials to environment variables</li>
+                  <li>Restart the server</li>
+                </ol>
+                <a 
+                  href="https://github.com/NickBenza/social-automation-platform/blob/main/docs/API_SETUP.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm mt-3"
+                >
+                  View Setup Guide <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <p className="text-xs text-gray-400">
+                For demo purposes, this is expected behavior until OAuth is configured.
+              </p>
             </div>
           )}
         </div>
